@@ -1,54 +1,38 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<!DOCTYPE html>
 <html>
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <meta http-equiv="Content-Style-Type" content="text/css">
-  <title></title>
-  <meta name="Generator" content="Cocoa HTML Writer">
-  <meta name="CocoaVersion" content="2575.2">
-  <style type="text/css">
-    p.p1 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica}
-    p.p2 {margin: 0.0px 0.0px 0.0px 0.0px; font: 12.0px Helvetica; min-height: 14.0px}
-  </style>
+    <title>Interactive Map</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
 </head>
 <body>
-<p class="p1">&lt;!DOCTYPE html&gt;</p>
-<p class="p1">&lt;html&gt;</p>
-<p class="p1">&lt;head&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;title&gt;Interactive Map&lt;/title&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;meta charset="utf-8" /&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;meta name="viewport" content="width=device-width, initial-scale=1.0"&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" /&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"&gt;&lt;/script&gt;</p>
-<p class="p1">&lt;/head&gt;</p>
-<p class="p1">&lt;body&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;div id="map" style="width: 100%; height: 600px;"&gt;&lt;/div&gt;</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;script&gt;</p>
-<p class="p1"><span class="Apple-converted-space">        </span>var map = L.map('map').setView([30.0, -98.5], 6);</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {</p>
-<p class="p1"><span class="Apple-converted-space">            </span>attribution: '&amp;copy; OpenStreetMap contributors'</p>
-<p class="p1"><span class="Apple-converted-space">        </span>}).addTo(map);</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>var data = [</p>
-<p class="p1"><span class="Apple-converted-space">            </span>{lat: 30.088289, lon: -98.219961, c1: 0.150741},</p>
-<p class="p1"><span class="Apple-converted-space">            </span>{lat: 30.008471, lon: -99.408820, c1: 0.331858},</p>
-<p class="p1"><span class="Apple-converted-space">            </span>{lat: 29.181134, lon: -99.563063, c1: 0.790037},</p>
-<p class="p1"><span class="Apple-converted-space">            </span>{lat: 30.570759, lon: -99.383971, c1: 0.272325},</p>
-<p class="p1"><span class="Apple-converted-space">            </span>{lat: 29.440037, lon: -98.044155, c1: 0.680083}</p>
-<p class="p1"><span class="Apple-converted-space">        </span>];</p>
-<p class="p2"><br></p>
-<p class="p1"><span class="Apple-converted-space">        </span>data.forEach(function(point) {</p>
-<p class="p1"><span class="Apple-converted-space">            </span>L.circleMarker([point.lat, point.lon], {</p>
-<p class="p1"><span class="Apple-converted-space">                </span>radius: 5 + (point.c1 * 10),</p>
-<p class="p1"><span class="Apple-converted-space">                </span>color: 'red',</p>
-<p class="p1"><span class="Apple-converted-space">                </span>fillColor: 'orange',</p>
-<p class="p1"><span class="Apple-converted-space">                </span>fillOpacity: 0.6</p>
-<p class="p1"><span class="Apple-converted-space">            </span>}).addTo(map)</p>
-<p class="p1"><span class="Apple-converted-space">            </span>.bindPopup("C1 value: " + point.c1.toFixed(3));</p>
-<p class="p1"><span class="Apple-converted-space">        </span>});</p>
-<p class="p1"><span class="Apple-converted-space">    </span>&lt;/script&gt;</p>
-<p class="p1">&lt;/body&gt;</p>
-<p class="p1">&lt;/html&gt;</p>
+    <div id="map" style="width: 100%; height: 600px;"></div>
+    <script>
+        var map = L.map('map').setView([30.0, -98.5], 6);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(map);
+
+        var data = [
+            {lat: 30.088289, lon: -98.219961, c1: 0.150741},
+            {lat: 30.008471, lon: -99.408820, c1: 0.331858},
+            {lat: 29.181134, lon: -99.563063, c1: 0.790037},
+            {lat: 30.570759, lon: -99.383971, c1: 0.272325},
+            {lat: 29.440037, lon: -98.044155, c1: 0.680083}
+        ];
+
+        data.forEach(function(point) {
+            L.circleMarker([point.lat, point.lon], {
+                radius: 5 + (point.c1 * 10),
+                color: 'red',
+                fillColor: 'orange',
+                fillOpacity: 0.6
+            }).addTo(map)
+            .bindPopup("C1 value: " + point.c1.toFixed(3));
+        });
+    </script>
 </body>
 </html>
