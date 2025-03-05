@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Pixelated Map</title>
+    <title>Pixelated Map with Basins</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
@@ -16,14 +16,7 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        var gridData = [
-            {lat: 29.014259, lon: -100.026806, c1: 0.272},
-            {lat: 29.691061, lon: -100.033616, c1: 0.337},
-            {lat: 30.322679, lon: -100.040185, c1: 0.475},
-            {lat: 30.187739, lon: -99.986828, c1: 0.022},
-            {lat: 29.105251, lon: -99.924943, c1: 0.581}
-        ];
-
+        // Function to get color based on C1 value
         function getColor(value) {
             return value > 0.75 ? '#800026' :
                    value > 0.5  ? '#BD0026' :
@@ -31,20 +24,46 @@
                                  '#FFEDA0';
         }
 
-        var gridSize = 0.05; // Approx grid size in degrees
+        var gridSize = 0.05; // Approximate grid size in degrees
 
-        gridData.forEach(function(cell) {
-            var bounds = [
-                [cell.lat - gridSize / 2, cell.lon - gridSize / 2],
-                [cell.lat + gridSize / 2, cell.lon + gridSize / 2]
-            ];
-            L.rectangle(bounds, {
-                color: getColor(cell.c1),
-                fillColor: getColor(cell.c1),
-                fillOpacity: 0.7,
-                weight: 0
-            }).addTo(map).bindPopup("C1 value: " + cell.c1.toFixed(3));
-        });
+        // Load dataset from CSV dynamically
+        fetch('dataset.csv')
+            .then(response => response.text())
+            .then(data => {
+                var rows = data.split('\n').slice(1); // Skip header
+                rows.forEach(row => {
+                    var cols = row.split(',');
+                    if (cols.length < 3) return;
+                    var lat = parseFloat(cols[1]);
+                    var lon = parseFloat(cols[0]);
+                    var c1 = parseFloat(cols[2]);
+                    
+                    var bounds = [
+                        [lat - gridSize / 2, lon - gridSize / 2],
+                        [lat + gridSize / 2, lon + gridSize / 2]
+                    ];
+                    
+                    L.rectangle(bounds, {
+                        color: getColor(c1),
+                        fillColor: getColor(c1),
+                        fillOpacity: 0.7,
+                        weight: 0
+                    }).addTo(map).bindPopup("C1 value: " + c1.toFixed(3));
+                });
+            });
+
+        // Load basin boundaries from GeoJSON
+        fetch('basins.geojson')
+            .then(response => response.json())
+            .then(data => {
+                L.geoJSON(data, {
+                    style: {
+                        color: 'black',
+                        weight: 2,
+                        fillOpacity: 0
+                    }
+                }).addTo(map);
+            });
     </script>
 </body>
 </html>
