@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Interactive Map</title>
+    <title>Pixelated Map</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
@@ -16,22 +16,34 @@
             attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        var data = [
-            {lat: 30.088289, lon: -98.219961, c1: 0.150741},
-            {lat: 30.008471, lon: -99.408820, c1: 0.331858},
-            {lat: 29.181134, lon: -99.563063, c1: 0.790037},
-            {lat: 30.570759, lon: -99.383971, c1: 0.272325},
-            {lat: 29.440037, lon: -98.044155, c1: 0.680083}
+        var gridData = [
+            {lat: 29.014259, lon: -100.026806, c1: 0.272},
+            {lat: 29.691061, lon: -100.033616, c1: 0.337},
+            {lat: 30.322679, lon: -100.040185, c1: 0.475},
+            {lat: 30.187739, lon: -99.986828, c1: 0.022},
+            {lat: 29.105251, lon: -99.924943, c1: 0.581}
         ];
 
-        data.forEach(function(point) {
-            L.circleMarker([point.lat, point.lon], {
-                radius: 5 + (point.c1 * 10),
-                color: 'red',
-                fillColor: 'orange',
-                fillOpacity: 0.6
-            }).addTo(map)
-            .bindPopup("C1 value: " + point.c1.toFixed(3));
+        function getColor(value) {
+            return value > 0.75 ? '#800026' :
+                   value > 0.5  ? '#BD0026' :
+                   value > 0.25 ? '#E31A1C' :
+                                 '#FFEDA0';
+        }
+
+        var gridSize = 0.05; // Approx grid size in degrees
+
+        gridData.forEach(function(cell) {
+            var bounds = [
+                [cell.lat - gridSize / 2, cell.lon - gridSize / 2],
+                [cell.lat + gridSize / 2, cell.lon + gridSize / 2]
+            ];
+            L.rectangle(bounds, {
+                color: getColor(cell.c1),
+                fillColor: getColor(cell.c1),
+                fillOpacity: 0.7,
+                weight: 0
+            }).addTo(map).bindPopup("C1 value: " + cell.c1.toFixed(3));
         });
     </script>
 </body>
