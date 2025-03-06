@@ -12,9 +12,26 @@
     <script>
         var map = L.map('map').setView([30.0, -98.5], 6);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
+        // Basemap options
+        var basemaps = {
+            "Streets": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; OpenStreetMap contributors'
+            }),
+            "Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles &copy; Esri'
+            }),
+            "Light Background": L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; CartoDB'
+            }),
+            "Dark Mode": L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; CartoDB'
+            })
+        };
+
+        basemaps["Streets"].addTo(map); // Default basemap
+
+        // Layer control to switch backgrounds
+        L.control.layers(basemaps).addTo(map);
 
         // Function to get color based on C1 value
         function getColor(value) {
@@ -58,8 +75,8 @@
             .then(data => {
                 L.geoJSON(data, {
                     style: {
-                        color: 'grey',
-                        weight: 1,
+                        color: 'black',
+                        weight: 2,
                         fillOpacity: 0
                     }
                 }).addTo(map);
