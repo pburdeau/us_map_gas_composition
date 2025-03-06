@@ -6,27 +6,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
-    <style>
-        .legend {
-            position: absolute;
-            bottom: 30px;
-            right: 10px;
-            background: white;
-            padding: 8px;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0,0,0,0.3);
-        }
-        .legend canvas {
-            width: 150px;
-            height: 15px;
-        }
-    </style>
 </head>
 <body>
     <div id="map" style="width: 100%; height: 600px;"></div>
     <script>
-        var map = L.map('map');
+        var map = L.map('map'); 
         var bounds = L.latLngBounds([]);
 
         var basemaps = {
@@ -44,39 +28,27 @@
             })
         };
 
-        basemaps["Streets"].addTo(map);
+        basemaps["Streets"].addTo(map); 
         L.control.layers(basemaps).addTo(map);
 
-        function getColor(value, minVal, maxVal) {
-            var scale = d3.scaleSequential(d3.interpolateTurbo)
-                          .domain([minVal, maxVal]);
-            return scale(value);
+        function getColor(value) {
+            return value > 0.75 ? '#800026' :
+                   value > 0.5  ? '#BD0026' :
+                   value > 0.25 ? '#E31A1C' :
+                                 '#FFEDA0';
         }
 
-        var gridSize = 0.05;
-        var minVal, maxVal;
+        var gridSize = 0.05; 
 
         fetch('dataset.csv')
             .then(response => response.text())
             .then(data => {
                 console.log("Dataset loaded:", data);
-                var rows = data.trim().split('\n').slice(1);
-                var values = [];
-
+                var rows = data.trim().split('\n').slice(1); 
                 rows.forEach(row => {
                     var cols = row.split(',');
                     if (cols.length < 3) return;
-                    var c1 = parseFloat(cols[2]);
-                    if (!isNaN(c1)) values.push(c1);
-                });
 
-                minVal = Math.min(...values);
-                maxVal = Math.max(...values);
-
-                rows.forEach(row => {
-                    var cols = row.split(',');
-                    if (cols.length < 3) return;
-                    
                     var lat = parseFloat(cols[1]);
                     var lon = parseFloat(cols[0]);
                     var c1 = parseFloat(cols[2]);
@@ -92,8 +64,8 @@
                     ];
 
                     L.rectangle(boundsBox, {
-                        color: getColor(c1, minVal, maxVal),
-                        fillColor: getColor(c1, minVal, maxVal),
+                        color: getColor(c1),
+                        fillColor: getColor(c1),
                         fillOpacity: 0.7,
                         weight: 0
                     }).addTo(map).bindPopup("C1 value: " + c1.toFixed(3));
@@ -107,8 +79,6 @@
                     console.error("No valid bounds found!");
                     map.setView([38, -102], 6);
                 }
-
-                addLegend(minVal, maxVal);
             })
             .catch(error => console.error("Error loading dataset:", error));
 
@@ -123,30 +93,6 @@
                     }
                 }).addTo(map);
             });
-
-        function addLegend(minVal, maxVal) {
-            var legend = L.control({position: 'bottomright'});
-            legend.onAdd = function(map) {
-                var div = L.DomUtil.create('div', 'legend');
-                var canvas = L.DomUtil.create('canvas', '', div);
-                canvas.width = 150;
-                canvas.height = 15;
-                var ctx = canvas.getContext('2d');
-                var gradient = ctx.createLinearGradient(0, 0, 150, 0);
-                for (var i = 0; i <= 1; i += 0.01) {
-                    gradient.addColorStop(i, d3.interpolateTurbo(i));
-                }
-                ctx.fillStyle = gradient;
-                ctx.fillRect(0, 0, 150, 15);
-                var labels = L.DomUtil.create('div', '', div);
-                labels.innerHTML = `<div style='display: flex; justify-content: space-between;'>
-                                      <span>${minVal.toFixed(1)}</span>
-                                      <span>${maxVal.toFixed(1)}</span>
-                                    </div>`;
-                return div;
-            };
-            legend.addTo(map);
-        }
     </script>
 </body>
 </html>
