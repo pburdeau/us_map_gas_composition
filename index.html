@@ -11,7 +11,6 @@
     <div id="map" style="width: 100%; height: 600px;"></div>
     <script>
         var map = L.map('map');
-        
         var bounds = L.latLngBounds([]); // Create an empty bounds object
 
         // Basemap options
@@ -31,52 +30,59 @@
         };
 
         basemaps["Streets"].addTo(map); // Default basemap
-
-        // Layer control to switch backgrounds
         L.control.layers(basemaps).addTo(map);
 
-        // Function to get color based on C1 value
         function getColor(value) {
-            return value > 0.75 ? '#800026' :
-                   value > 0.5  ? '#BD0026' :
-                   value > 0.25 ? '#E31A1C' :
-                                 '#FFEDA0';
+            return value > 75 ? '#800026' :
+                   value > 50 ? '#BD0026' :
+                   value > 25 ? '#E31A1C' :
+                                '#FFEDA0';
         }
 
-        var gridSize = 0.01; // Approximate grid size in degrees
+        var gridSize = 0.05; // Approximate grid size in degrees
 
-        // Load dataset from CSV dynamically
         fetch('dataset.csv')
             .then(response => response.text())
             .then(data => {
-                var rows = data.split('\\n').slice(1); // Skip header
+                console.log("Dataset loaded:", data); // Debugging log
+                var rows = data.trim().split('\n').slice(1); // Trim whitespace and split rows
                 rows.forEach(row => {
                     var cols = row.split(',');
                     if (cols.length < 3) return;
+                    
                     var lat = parseFloat(cols[1]);
                     var lon = parseFloat(cols[0]);
                     var c1 = parseFloat(cols[2]);
-        
+
+                    if (isNaN(lat) || isNaN(lon) || isNaN(c1)) {
+                        console.error("Invalid data:", row); // Log problematic data
+                        return;
+                    }
+
                     var boundsBox = [
                         [lat - gridSize / 2, lon - gridSize / 2],
                         [lat + gridSize / 2, lon + gridSize / 2]
                     ];
-        
+
                     L.rectangle(boundsBox, {
                         color: getColor(c1),
                         fillColor: getColor(c1),
                         fillOpacity: 0.7,
                         weight: 0
                     }).addTo(map).bindPopup("C1 value: " + c1.toFixed(3));
-        
+
                     bounds.extend([lat, lon]); // Expand the map bounds
                 });
-        
-                map.fitBounds(bounds); // Adjust map to fit all data points
-            });
 
+                if (bounds.isValid()) {
+                    map.fitBounds(bounds); // Adjust map to fit all data points
+                } else {
+                    console.error("No valid bounds found!");
+                    map.setView([38, -102], 6); // Set a default fallback view
+                }
+            })
+            .catch(error => console.error("Error loading dataset:", error));
 
-        // Load basin boundaries from GeoJSON
         fetch('basins.geojson')
             .then(response => response.json())
             .then(data => {
