@@ -10,7 +10,9 @@
 <body>
     <div id="map" style="width: 100%; height: 600px;"></div>
     <script>
-        var map = L.map('map').setView([30.0, -98.5], 6);
+        var map = L.map('map');
+        
+        var bounds = L.latLngBounds([]); // Create an empty bounds object
 
         // Basemap options
         var basemaps = {
@@ -47,27 +49,32 @@
         fetch('dataset.csv')
             .then(response => response.text())
             .then(data => {
-                var rows = data.split('\n').slice(1); // Skip header
+                var rows = data.split('\\n').slice(1); // Skip header
                 rows.forEach(row => {
                     var cols = row.split(',');
                     if (cols.length < 3) return;
                     var lat = parseFloat(cols[1]);
                     var lon = parseFloat(cols[0]);
                     var c1 = parseFloat(cols[2]);
-                    
-                    var bounds = [
+        
+                    var boundsBox = [
                         [lat - gridSize / 2, lon - gridSize / 2],
                         [lat + gridSize / 2, lon + gridSize / 2]
                     ];
-                    
-                    L.rectangle(bounds, {
+        
+                    L.rectangle(boundsBox, {
                         color: getColor(c1),
                         fillColor: getColor(c1),
                         fillOpacity: 0.7,
                         weight: 0
                     }).addTo(map).bindPopup("C1 value: " + c1.toFixed(3));
+        
+                    bounds.extend([lat, lon]); // Expand the map bounds
                 });
+        
+                map.fitBounds(bounds); // Adjust map to fit all data points
             });
+
 
         // Load basin boundaries from GeoJSON
         fetch('basins.geojson')
