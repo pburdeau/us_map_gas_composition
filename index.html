@@ -6,14 +6,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+    <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
 </head>
 <body>
     <div id="map" style="width: 100%; height: 600px;"></div>
     <script>
         var map = L.map('map');
-        var bounds = L.latLngBounds([]); // Create an empty bounds object
+        var bounds = L.latLngBounds([]);
 
-        // Basemap options
         var basemaps = {
             "Streets": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                 attribution: '&copy; OpenStreetMap contributors'
@@ -29,23 +29,34 @@
             })
         };
 
-        basemaps["Streets"].addTo(map); // Default basemap
+        basemaps["Streets"].addTo(map);
         L.control.layers(basemaps).addTo(map);
 
-        function getColor(value) {
-            return value > 75 ? '#800026' :
-                   value > 50 ? '#BD0026' :
-                   value > 25 ? '#E31A1C' :
-                                '#FFEDA0';
+        function getColor(value, minVal, maxVal) {
+            var scale = d3.scaleSequential(d3.interpolateTurbo)
+                          .domain([minVal, maxVal]);
+            return scale(value);
         }
 
-        var gridSize = 0.05; // Approximate grid size in degrees
+        var gridSize = 0.05;
 
         fetch('dataset.csv')
             .then(response => response.text())
             .then(data => {
-                console.log("Dataset loaded:", data); // Debugging log
-                var rows = data.trim().split('\n').slice(1); // Trim whitespace and split rows
+                console.log("Dataset loaded:", data);
+                var rows = data.trim().split('\n').slice(1);
+                var values = [];
+
+                rows.forEach(row => {
+                    var cols = row.split(',');
+                    if (cols.length < 3) return;
+                    var c1 = parseFloat(cols[2]);
+                    if (!isNaN(c1)) values.push(c1);
+                });
+
+                var minVal = Math.min(...values);
+                var maxVal = Math.max(...values);
+
                 rows.forEach(row => {
                     var cols = row.split(',');
                     if (cols.length < 3) return;
@@ -55,7 +66,7 @@
                     var c1 = parseFloat(cols[2]);
 
                     if (isNaN(lat) || isNaN(lon) || isNaN(c1)) {
-                        console.error("Invalid data:", row); // Log problematic data
+                        console.error("Invalid data:", row);
                         return;
                     }
 
@@ -65,20 +76,20 @@
                     ];
 
                     L.rectangle(boundsBox, {
-                        color: getColor(c1),
-                        fillColor: getColor(c1),
+                        color: getColor(c1, minVal, maxVal),
+                        fillColor: getColor(c1, minVal, maxVal),
                         fillOpacity: 0.7,
                         weight: 0
                     }).addTo(map).bindPopup("C1 value: " + c1.toFixed(3));
 
-                    bounds.extend([lat, lon]); // Expand the map bounds
+                    bounds.extend([lat, lon]);
                 });
 
                 if (bounds.isValid()) {
-                    map.fitBounds(bounds); // Adjust map to fit all data points
+                    map.fitBounds(bounds);
                 } else {
                     console.error("No valid bounds found!");
-                    map.setView([38, -102], 6); // Set a default fallback view
+                    map.setView([38, -102], 6);
                 }
             })
             .catch(error => console.error("Error loading dataset:", error));
