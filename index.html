@@ -1,132 +1,132 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Gas Composition Map (Per Basin)</title>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-    
-    <style>
-        body { margin: 0; padding: 0; }
-        #map { width: 100%; height: 100vh; }
-        #controls {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            z-index: 1000;
-            background: white;
-            padding: 6px;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-    </style>
+  <meta charset="utf-8" />
+  <title>Gas Composition Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <script src="https://unpkg.com/deck.gl@8.9.28/dist.min.js"></script>
+  <script src="https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.js"></script>
+  <script src="https://unpkg.com/@deck.gl/core@8.9.28/dist.min.js"></script>
+
+  <style>
+    body { margin: 0; padding: 0; }
+    #map { width: 100vw; height: 100vh; }
+    #tooltip {
+      position: absolute;
+      background: white;
+      padding: 4px;
+      font-size: 13px;
+      border: 1px solid gray;
+      display: none;
+      pointer-events: none;
+    }
+  </style>
 </head>
 <body>
-    <div id="controls">
-        Component:
-        <select id="componentSelect">
-            <option value="C1">C1</option>
-            <option value="std_C1">std_C1</option>
-            <option value="CO2">CO2</option>
-            <option value="std_CO2">std_CO2</option>
-            <option value="HE">HE</option>
-            <option value="std_HE">std_HE</option>
-            <option value="H2S">H2S</option>
-            <option value="std_H2S">std_H2S</option>
-        </select>
-        Basin:
-        <select id="basinSelect">
-            <option value="Permian_Basin">Permian Basin</option>
-            <option value="Anadarko_Basin">Anadarko Basin</option>
-            <option value="Appalachian_Basin">Appalachian Basin</option>
-            <option value="San_Joaquin_Basin">San Joaquin Basin</option>
-        </select>
-        <button onclick="loadData()">Load</button>
-    </div>
+  <div id="map"></div>
+  <div id="tooltip"></div>
 
-    <div id="map"></div>
+  <script type="module">
+    import { Deck } from 'https://unpkg.com/deck.gl@8.9.28/dist.min.mjs';
+    import { GeoJsonLayer } from 'https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.mjs';
 
-    <script>
-        const map = L.map('map', {
-            center: [38, -102],
-            zoom: 5,
-            attributionControl: false
+    const map = new Deck({
+      initialViewState: {
+        longitude: -102,
+        latitude: 38,
+        zoom: 5
+      },
+      controller: true,
+      parent: document.getElementById('map'),
+      layers: []
+    });
+
+    const gridSize = 0.05;
+    const tooltip = document.getElementById('tooltip');
+
+    function getColor(value) {
+      if (value > 90) return [128, 0, 38];
+      if (value > 75) return [189, 0, 38];
+      if (value > 60) return [227, 26, 28];
+      if (value > 45) return [252, 78, 42];
+      if (value > 30) return [253, 141, 60];
+      if (value > 15) return [254, 217, 118];
+      if (value > 5)  return [255, 255, 178];
+      return [255, 255, 204];
+    }
+
+    function csvToGeoJSON(csvText) {
+      const lines = csvText.trim().split('\n').slice(1);
+      const features = [];
+
+      for (const line of lines) {
+        const [lon, lat, val] = line.split(',').map(parseFloat);
+        if (isNaN(lat) || isNaN(lon) || isNaN(val)) continue;
+
+        const half = gridSize / 2;
+        const polygon = [
+          [lon - half, lat - half],
+          [lon + half, lat - half],
+          [lon + half, lat + half],
+          [lon - half, lat + half],
+          [lon - half, lat - half]
+        ];
+
+        features.push({
+          type: "Feature",
+          properties: { value: val },
+          geometry: {
+            type: "Polygon",
+            coordinates: [polygon]
+          }
         });
+      }
 
-        let currentLayer = null;
-        const gridSize = 0.05;
+      return {
+        type: "FeatureCollection",
+        features: features
+      };
+    }
 
-        function getColor(value) {
-            return value > 90 ? '#800026' :
-                   value > 75 ? '#BD0026' :
-                   value > 60 ? '#E31A1C' :
-                   value > 45 ? '#FC4E2A' :
-                   value > 30 ? '#FD8D3C' :
-                   value > 15 ? '#FEB24C' :
-                   value > 5  ? '#FED976' :
-                                '#FFEDA0';
+    async function loadMapData(csvPath) {
+      const csv = await fetch(csvPath).then(r => r.text());
+      const geojson = csvToGeoJSON(csv);
+
+      const dataLayer = new GeoJsonLayer({
+        id: 'data',
+        data: geojson,
+        filled: true,
+        stroked: false,
+        getFillColor: d => getColor(d.properties.value),
+        pickable: true,
+        opacity: 0.7,
+        onHover: info => {
+          if (info.object) {
+            tooltip.style.display = 'block';
+            tooltip.style.left = `${info.x}px`;
+            tooltip.style.top = `${info.y}px`;
+            tooltip.innerHTML = `Value: ${info.object.properties.value.toFixed(2)}`;
+          } else {
+            tooltip.style.display = 'none';
+          }
         }
+      });
 
-        function loadData() {
-            const component = document.getElementById("componentSelect").value;
-            const basin = document.getElementById("basinSelect").value;
-            const filePath = `datasets_leaflet/${basin}/dataset_${component}.csv`;
+      const basinLayer = new GeoJsonLayer({
+        id: 'basins',
+        data: 'basins.geojson',
+        stroked: true,
+        filled: false,
+        getLineColor: [80, 80, 80],
+        getLineWidth: 1
+      });
 
-            if (currentLayer) {
-                map.removeLayer(currentLayer);
-            }
+      map.setProps({ layers: [basinLayer, dataLayer] });
+    }
 
-            const layerGroup = L.layerGroup();
-            const bounds = L.latLngBounds([]);
-
-            fetch(filePath)
-                .then(response => response.text())
-                .then(data => {
-                    const rows = data.trim().split('\n').slice(1);
-                    rows.forEach(row => {
-                        const [lon, lat, val] = row.split(',').map(parseFloat);
-                        if (isNaN(lat) || isNaN(lon) || isNaN(val)) return;
-
-                        const rectBounds = [
-                            [lat - gridSize / 2, lon - gridSize / 2],
-                            [lat + gridSize / 2, lon + gridSize / 2]
-                        ];
-
-                        const rect = L.rectangle(rectBounds, {
-                            color: getColor(val),
-                            fillColor: getColor(val),
-                            fillOpacity: 0.7,
-                            weight: 0
-                        }).bindPopup(`${component}: ${val.toFixed(2)}`);
-
-                        layerGroup.addLayer(rect);
-                        bounds.extend([lat, lon]);
-                    });
-
-                    currentLayer = layerGroup;
-                    currentLayer.addTo(map);
-                    if (bounds.isValid()) map.fitBounds(bounds);
-                })
-                .catch(err => {
-                    alert(`Failed to load data for ${basin} - ${component}`);
-                    console.error(err);
-                });
-        }
-
-        // Load basin borders
-        fetch('basins.geojson')
-            .then(response => response.json())
-            .then(data => {
-                L.geoJSON(data, {
-                    style: {
-                        color: 'gray',
-                        weight: 1,
-                        fillOpacity: 0
-                    }
-                }).addTo(map);
-            });
-    </script>
+    // Change the path here to use a different CSV
+    loadMapData('datasets_leaflet/Permian_Basin/dataset_C1.csv');
+  </script>
 </body>
 </html>
