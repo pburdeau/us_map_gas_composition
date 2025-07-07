@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Gas Composition Viewer (with loading)</title>
+  <title>Gas Composition Viewer (interactive)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <script src="https://unpkg.com/proj4@2.8.0/dist/proj4.js"></script>
@@ -22,6 +22,15 @@
       display: none;
       pointer-events: none;
     }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 8px;
+      border: 1px solid gray;
+      z-index: 1000;
+    }
     #loading {
       position: absolute;
       top: 10px;
@@ -38,16 +47,37 @@
 <body>
   <div id="map"></div>
   <div id="tooltip"></div>
-  <div id="loading">Loading map data…</div>
+  <div id="loading" style="display:none;">Loading map data…</div>
+
+  <div id="controls">
+    <label for="basinSelect">Basin:</label>
+    <select id="basinSelect">
+      <option value="Permian_Basin">Permian Basin</option>
+      <option value="Anadarko_Basin">Anadarko Basin</option>
+      <option value="Appalachian_Basin">Appalachian Basin</option>
+      <option value="San_Joaquin_Basin">San Joaquin Basin</option>
+    </select>
+    <label for="componentSelect">Component:</label>
+    <select id="componentSelect">
+      <option value="C1">C1</option>
+      <option value="std_C1">std_C1</option>
+      <option value="CO2">CO2</option>
+      <option value="std_CO2">std_CO2</option>
+      <option value="HE">HE</option>
+      <option value="std_HE">std_HE</option>
+      <option value="H2S">H2S</option>
+      <option value="std_H2S">std_H2S</option>
+    </select>
+    <button id="loadButton">Load</button>
+  </div>
 
   <script type="module">
     import { Deck, MapView } from 'https://unpkg.com/@deck.gl/core@8.9.28/dist.min.mjs';
     import { GeoJsonLayer } from 'https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.mjs';
 
-    // Define projection for EPSG:26914 (UTM zone 14N)
     proj4.defs("EPSG:26914", "+proj=utm +zone=14 +datum=NAD83 +units=m +no_defs");
 
-    const gridSize = 5000;  // meters
+    const gridSize = 5000;
     const tooltip = document.getElementById('tooltip');
     const loading = document.getElementById('loading');
 
@@ -105,15 +135,18 @@
         });
       }
 
-      console.log(`Finished converting to GeoJSON with ${features.length} polygons.`);
-      return { type: "FeatureCollection", features: features };
+      return {
+        type: "FeatureCollection",
+        features: features
+      };
     }
 
-    async function loadMapData(csvPath) {
+    async function loadMapData(basin, component) {
       try {
+        loading.style.display = 'block';
+        const csvPath = `datasets_leaflet/${basin}/dataset_${component}.csv`;
         console.log(`Fetching CSV: ${csvPath}`);
         const csv = await fetch(csvPath).then(r => r.text());
-        console.log("CSV loaded, converting coordinates...");
         const geojson = csvToGeoJSON(csv);
 
         const dataLayer = new GeoJsonLayer({
@@ -136,7 +169,6 @@
           }
         });
 
-        console.log("Loading basins.geojson...");
         const basinsGeojson = await fetch('basins.geojson').then(r => r.json());
 
         const basinLayer = new GeoJsonLayer({
@@ -148,19 +180,23 @@
           getLineWidth: 1
         });
 
-        console.log("Rendering layers...");
         map.setProps({ layers: [basinLayer, dataLayer] });
-
       } catch (error) {
         console.error("Error loading map data:", error);
-        alert("Failed to load map data. Check console for details.");
+        alert("Failed to load map data.");
       } finally {
         loading.style.display = 'none';
       }
     }
 
-    // Load one file initially
-    loadMapData('datasets_leaflet/Permian_Basin/dataset_C1.csv');
+    document.getElementById('loadButton').addEventListener('click', () => {
+      const basin = document.getElementById('basinSelect').value;
+      const component = document.getElementById('componentSelect').value;
+      loadMapData(basin, component);
+    });
+
+    // Load default
+    loadMapData('Permian_Basin', 'C1');
   </script>
 </body>
 </html>
