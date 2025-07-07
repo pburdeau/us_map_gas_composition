@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Gas Composition Viewer with UTM Conversion</title>
+  <title>Gas Composition Viewer (with loading)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <script src="https://unpkg.com/proj4@2.8.0/dist/proj4.js"></script>
@@ -22,21 +22,34 @@
       display: none;
       pointer-events: none;
     }
+    #loading {
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: white;
+      padding: 6px 12px;
+      border: 1px solid #888;
+      font-size: 14px;
+      z-index: 999;
+    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div id="tooltip"></div>
+  <div id="loading">Loading map data…</div>
 
   <script type="module">
     import { Deck, MapView } from 'https://unpkg.com/@deck.gl/core@8.9.28/dist.min.mjs';
     import { GeoJsonLayer } from 'https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.mjs';
 
-    // Define the UTM Zone 14N (EPSG:26914)
+    // Define projection for EPSG:26914 (UTM zone 14N)
     proj4.defs("EPSG:26914", "+proj=utm +zone=14 +datum=NAD83 +units=m +no_defs");
 
     const gridSize = 5000;  // meters
     const tooltip = document.getElementById('tooltip');
+    const loading = document.getElementById('loading');
 
     const map = new Deck({
       parent: document.getElementById('map'),
@@ -64,13 +77,11 @@
     function csvToGeoJSON(csvText) {
       const lines = csvText.trim().split('\n').slice(1);
       const features = [];
+      console.log(`Parsing ${lines.length} lines of CSV data...`);
 
       for (const line of lines) {
         const [x, y, val] = line.split(',').map(parseFloat);
         if (isNaN(x) || isNaN(y) || isNaN(val)) continue;
-
-        // Convert UTM to lon/lat
-        const [lon, lat] = proj4("EPSG:26914", "EPSG:4326", [x, y]);
 
         const half = gridSize / 2;
         const [lon1, lat1] = proj4("EPSG:26914", "EPSG:4326", [x - half, y - half]);
@@ -94,49 +105,61 @@
         });
       }
 
-      return {
-        type: "FeatureCollection",
-        features: features
-      };
+      console.log(`Finished converting to GeoJSON with ${features.length} polygons.`);
+      return { type: "FeatureCollection", features: features };
     }
 
     async function loadMapData(csvPath) {
-      const csv = await fetch(csvPath).then(r => r.text());
-      const geojson = csvToGeoJSON(csv);
+      try {
+        console.log(`Fetching CSV: ${csvPath}`);
+        const csv = await fetch(csvPath).then(r => r.text());
+        console.log("CSV loaded, converting coordinates...");
+        const geojson = csvToGeoJSON(csv);
 
-      const dataLayer = new GeoJsonLayer({
-        id: 'data-layer',
-        data: geojson,
-        filled: true,
-        stroked: false,
-        getFillColor: d => getColor(d.properties.value),
-        pickable: true,
-        opacity: 0.7,
-        onHover: info => {
-          if (info.object) {
-            tooltip.style.display = 'block';
-            tooltip.style.left = `${info.x}px`;
-            tooltip.style.top = `${info.y}px`;
-            tooltip.innerHTML = `Value: ${info.object.properties.value.toFixed(3)}`;
-          } else {
-            tooltip.style.display = 'none';
+        const dataLayer = new GeoJsonLayer({
+          id: 'data-layer',
+          data: geojson,
+          filled: true,
+          stroked: false,
+          getFillColor: d => getColor(d.properties.value),
+          pickable: true,
+          opacity: 0.7,
+          onHover: info => {
+            if (info.object) {
+              tooltip.style.display = 'block';
+              tooltip.style.left = `${info.x}px`;
+              tooltip.style.top = `${info.y}px`;
+              tooltip.innerHTML = `Value: ${info.object.properties.value.toFixed(3)}`;
+            } else {
+              tooltip.style.display = 'none';
+            }
           }
-        }
-      });
+        });
 
-      const basinLayer = new GeoJsonLayer({
-        id: 'basins',
-        data: 'basins.geojson',
-        stroked: true,
-        filled: false,
-        getLineColor: [80, 80, 80],
-        getLineWidth: 1
-      });
+        console.log("Loading basins.geojson...");
+        const basinsGeojson = await fetch('basins.geojson').then(r => r.json());
 
-      map.setProps({ layers: [basinLayer, dataLayer] });
+        const basinLayer = new GeoJsonLayer({
+          id: 'basins',
+          data: basinsGeojson,
+          stroked: true,
+          filled: false,
+          getLineColor: [80, 80, 80],
+          getLineWidth: 1
+        });
+
+        console.log("Rendering layers...");
+        map.setProps({ layers: [basinLayer, dataLayer] });
+
+      } catch (error) {
+        console.error("Error loading map data:", error);
+        alert("Failed to load map data. Check console for details.");
+      } finally {
+        loading.style.display = 'none';
+      }
     }
 
-    // Test it with one converted file
+    // Load one file initially
     loadMapData('datasets_leaflet/Permian_Basin/dataset_C1.csv');
   </script>
 </body>
