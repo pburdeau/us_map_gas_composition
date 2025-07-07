@@ -2,8 +2,10 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <title>Gas Composition Viewer</title>
+  <title>Gas Composition Viewer with UTM Conversion</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <script src="https://unpkg.com/proj4@2.8.0/dist/proj4.js"></script>
   <script src="https://unpkg.com/deck.gl@8.9.28/dist.min.js"></script>
   <script src="https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.js"></script>
   <script src="https://unpkg.com/@deck.gl/core@8.9.28/dist.min.js"></script>
@@ -20,63 +22,33 @@
       display: none;
       pointer-events: none;
     }
-    #controls {
-      position: absolute;
-      z-index: 10;
-      top: 10px;
-      left: 10px;
-      background: rgba(255, 255, 255, 0.9);
-      padding: 8px;
-      border-radius: 4px;
-      font-size: 14px;
-    }
-    select { margin: 4px 0; width: 160px; }
   </style>
 </head>
 <body>
   <div id="map"></div>
-  <div id="controls">
-    <label for="basin">Basin:</label><br/>
-    <select id="basin">
-      <option>Permian_Basin</option>
-      <option>Anadarko_Basin</option>
-      <option>Appalachian_Basin</option>
-      <option>San_Joaquin_Basin</option>
-    </select><br/>
-    <label for="component">Component:</label><br/>
-    <select id="component">
-      <option>C1</option>
-      <option>std_C1</option>
-      <option>CO2</option>
-      <option>std_CO2</option>
-      <option>HE</option>
-      <option>std_HE</option>
-      <option>H2S</option>
-      <option>std_H2S</option>
-    </select>
-  </div>
   <div id="tooltip"></div>
 
   <script type="module">
     import { Deck, MapView } from 'https://unpkg.com/@deck.gl/core@8.9.28/dist.min.mjs';
     import { GeoJsonLayer } from 'https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.mjs';
 
+    // Define the UTM Zone 14N (EPSG:26914)
+    proj4.defs("EPSG:26914", "+proj=utm +zone=14 +datum=NAD83 +units=m +no_defs");
+
+    const gridSize = 5000;  // meters
+    const tooltip = document.getElementById('tooltip');
+
     const map = new Deck({
       parent: document.getElementById('map'),
-      views: [new MapView({ id: 'map-view' })],
+      views: [new MapView()],
       controller: true,
       initialViewState: {
         longitude: -102,
         latitude: 38,
-        zoom: 5,
-        minZoom: 2,
-        maxZoom: 15
+        zoom: 5
       },
       layers: []
     });
-
-    const gridSize = 0.05;
-    const tooltip = document.getElementById('tooltip');
 
     function getColor(value) {
       if (value > 90) return [128, 0, 38];
@@ -94,16 +66,22 @@
       const features = [];
 
       for (const line of lines) {
-        const [lon, lat, val] = line.split(',').map(parseFloat);
-        if (isNaN(lat) || isNaN(lon) || isNaN(val)) continue;
+        const [x, y, val] = line.split(',').map(parseFloat);
+        if (isNaN(x) || isNaN(y) || isNaN(val)) continue;
+
+        // Convert UTM to lon/lat
+        const [lon, lat] = proj4("EPSG:26914", "EPSG:4326", [x, y]);
 
         const half = gridSize / 2;
+        const [lon1, lat1] = proj4("EPSG:26914", "EPSG:4326", [x - half, y - half]);
+        const [lon2, lat2] = proj4("EPSG:26914", "EPSG:4326", [x + half, y + half]);
+
         const polygon = [
-          [lon - half, lat - half],
-          [lon + half, lat - half],
-          [lon + half, lat + half],
-          [lon - half, lat + half],
-          [lon - half, lat - half]
+          [lon1, lat1],
+          [lon2, lat1],
+          [lon2, lat2],
+          [lon1, lat2],
+          [lon1, lat1]
         ];
 
         features.push({
@@ -116,14 +94,13 @@
         });
       }
 
-      return { type: "FeatureCollection", features: features };
+      return {
+        type: "FeatureCollection",
+        features: features
+      };
     }
 
-    async function updateMap() {
-      const basin = document.getElementById('basin').value;
-      const component = document.getElementById('component').value;
-      const csvPath = `datasets_leaflet/${basin}/dataset_${component}.csv`;
-
+    async function loadMapData(csvPath) {
       const csv = await fetch(csvPath).then(r => r.text());
       const geojson = csvToGeoJSON(csv);
 
@@ -140,7 +117,7 @@
             tooltip.style.display = 'block';
             tooltip.style.left = `${info.x}px`;
             tooltip.style.top = `${info.y}px`;
-            tooltip.innerHTML = `Value: ${info.object.properties.value.toFixed(2)}`;
+            tooltip.innerHTML = `Value: ${info.object.properties.value.toFixed(3)}`;
           } else {
             tooltip.style.display = 'none';
           }
@@ -159,10 +136,8 @@
       map.setProps({ layers: [basinLayer, dataLayer] });
     }
 
-    document.getElementById('basin').addEventListener('change', updateMap);
-    document.getElementById('component').addEventListener('change', updateMap);
-
-    updateMap();  // initial load
+    // Test it with one converted file
+    loadMapData('datasets_leaflet/Permian_Basin/dataset_C1.csv');
   </script>
 </body>
 </html>
