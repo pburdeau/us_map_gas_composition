@@ -1,39 +1,50 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Gas Composition Map</title>
+    <title>Gas Composition Map (Per Basin)</title>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <!-- Leaflet -->
+    
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
-
+    
     <style>
         body { margin: 0; padding: 0; }
-        #map { width: 100vw; height: 100vh; }
-        #componentSelect {
+        #map { width: 100%; height: 100vh; }
+        #controls {
             position: absolute;
             top: 10px;
             left: 10px;
             z-index: 1000;
-            font-size: 16px;
-            padding: 4px;
+            background: white;
+            padding: 6px;
+            border-radius: 4px;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
-    <select id="componentSelect">
-        <option value="C1">C1</option>
-        <option value="std_C1">std_C1</option>
-        <option value="CO2">CO2</option>
-        <option value="std_CO2">std_CO2</option>
-        <option value="HE">HE</option>
-        <option value="std_HE">std_HE</option>
-        <option value="H2S">H2S</option>
-        <option value="std_H2S">std_H2S</option>
-        <!-- Add more as needed -->
-    </select>
+    <div id="controls">
+        Component:
+        <select id="componentSelect">
+            <option value="C1">C1</option>
+            <option value="std_C1">std_C1</option>
+            <option value="CO2">CO2</option>
+            <option value="std_CO2">std_CO2</option>
+            <option value="HE">HE</option>
+            <option value="std_HE">std_HE</option>
+            <option value="H2S">H2S</option>
+            <option value="std_H2S">std_H2S</option>
+        </select>
+        Basin:
+        <select id="basinSelect">
+            <option value="Permian_Basin">Permian Basin</option>
+            <option value="Anadarko_Basin">Anadarko Basin</option>
+            <option value="Appalachian_Basin">Appalachian Basin</option>
+            <option value="San_Joaquin_Basin">San Joaquin Basin</option>
+        </select>
+        <button onclick="loadData()">Load</button>
+    </div>
 
     <div id="map"></div>
 
@@ -41,13 +52,11 @@
         const map = L.map('map', {
             center: [38, -102],
             zoom: 5,
-            zoomSnap: 0.1,
-            zoomDelta: 0.1,
             attributionControl: false
         });
 
-        const gridSize = 0.05;
         let currentLayer = null;
+        const gridSize = 0.05;
 
         function getColor(value) {
             return value > 90 ? '#800026' :
@@ -60,63 +69,59 @@
                                 '#FFEDA0';
         }
 
-        const basins = [
-            "Permian_Basin", "Anadarko_Basin", "Appalachian_Basin", "San_Joaquin_Basin"
-            // Add more if needed
-        ];
+        function loadData() {
+            const component = document.getElementById("componentSelect").value;
+            const basin = document.getElementById("basinSelect").value;
+            const filePath = `datasets_leaflet/${basin}/dataset_${component}.csv`;
 
-        function loadComponent(component) {
-            if (currentLayer) map.removeLayer(currentLayer);
-            const group = L.layerGroup();
+            if (currentLayer) {
+                map.removeLayer(currentLayer);
+            }
+
+            const layerGroup = L.layerGroup();
             const bounds = L.latLngBounds([]);
 
-            const promises = basins.map(basin => {
-                const file = `datasets_leaflet/${basin}/dataset_${component}.csv`;
-                return fetch(file)
-                    .then(r => r.ok ? r.text() : null)
-                    .then(text => {
-                        if (!text) return;
-                        const rows = text.trim().split('\n').slice(1);
-                        rows.forEach(row => {
-                            const [lon, lat, val] = row.split(',').map(parseFloat);
-                            if (isNaN(lat) || isNaN(lon) || isNaN(val)) return;
+            fetch(filePath)
+                .then(response => response.text())
+                .then(data => {
+                    const rows = data.trim().split('\n').slice(1);
+                    rows.forEach(row => {
+                        const [lon, lat, val] = row.split(',').map(parseFloat);
+                        if (isNaN(lat) || isNaN(lon) || isNaN(val)) return;
 
-                            const rectBounds = [
-                                [lat - gridSize / 2, lon - gridSize / 2],
-                                [lat + gridSize / 2, lon + gridSize / 2]
-                            ];
-                            const rect = L.rectangle(rectBounds, {
-                                color: getColor(val),
-                                fillColor: getColor(val),
-                                fillOpacity: 0.7,
-                                weight: 0
-                            }).bindPopup(`${component}: ${val.toFixed(2)}`);
-                            group.addLayer(rect);
-                            bounds.extend([lat, lon]);
-                        });
+                        const rectBounds = [
+                            [lat - gridSize / 2, lon - gridSize / 2],
+                            [lat + gridSize / 2, lon + gridSize / 2]
+                        ];
+
+                        const rect = L.rectangle(rectBounds, {
+                            color: getColor(val),
+                            fillColor: getColor(val),
+                            fillOpacity: 0.7,
+                            weight: 0
+                        }).bindPopup(`${component}: ${val.toFixed(2)}`);
+
+                        layerGroup.addLayer(rect);
+                        bounds.extend([lat, lon]);
                     });
-            });
 
-            Promise.all(promises).then(() => {
-                currentLayer = group;
-                currentLayer.addTo(map);
-                if (bounds.isValid()) map.fitBounds(bounds);
-            });
+                    currentLayer = layerGroup;
+                    currentLayer.addTo(map);
+                    if (bounds.isValid()) map.fitBounds(bounds);
+                })
+                .catch(err => {
+                    alert(`Failed to load data for ${basin} - ${component}`);
+                    console.error(err);
+                });
         }
 
-        document.getElementById('componentSelect').addEventListener('change', function () {
-            loadComponent(this.value);
-        });
-
-        loadComponent('C1'); // default
-
-        // Add basin borders
+        // Load basin borders
         fetch('basins.geojson')
             .then(response => response.json())
             .then(data => {
                 L.geoJSON(data, {
                     style: {
-                        color: 'black',
+                        color: 'gray',
                         weight: 1,
                         fillOpacity: 0
                     }
