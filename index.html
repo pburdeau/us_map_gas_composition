@@ -4,14 +4,13 @@
   <meta charset="utf-8" />
   <title>Gas Composition Viewer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
   <script src="https://unpkg.com/deck.gl@8.9.28/dist.min.js"></script>
   <script src="https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.js"></script>
   <script src="https://unpkg.com/@deck.gl/core@8.9.28/dist.min.js"></script>
 
   <style>
-    body { margin: 0; padding: 0; }
-    #map { width: 100vw; height: 100vh; }
+    body { margin: 0; padding: 0; font-family: sans-serif; }
+    #map { width: 100vw; height: 100vh; position: relative; }
     #tooltip {
       position: absolute;
       background: white;
@@ -21,24 +20,58 @@
       display: none;
       pointer-events: none;
     }
+    #controls {
+      position: absolute;
+      z-index: 10;
+      top: 10px;
+      left: 10px;
+      background: rgba(255, 255, 255, 0.9);
+      padding: 8px;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+    select { margin: 4px 0; width: 160px; }
   </style>
 </head>
 <body>
   <div id="map"></div>
+  <div id="controls">
+    <label for="basin">Basin:</label><br/>
+    <select id="basin">
+      <option>Permian_Basin</option>
+      <option>Anadarko_Basin</option>
+      <option>Appalachian_Basin</option>
+      <option>San_Joaquin_Basin</option>
+    </select><br/>
+    <label for="component">Component:</label><br/>
+    <select id="component">
+      <option>C1</option>
+      <option>std_C1</option>
+      <option>CO2</option>
+      <option>std_CO2</option>
+      <option>HE</option>
+      <option>std_HE</option>
+      <option>H2S</option>
+      <option>std_H2S</option>
+    </select>
+  </div>
   <div id="tooltip"></div>
 
   <script type="module">
-    import { Deck } from 'https://unpkg.com/deck.gl@8.9.28/dist.min.mjs';
+    import { Deck, MapView } from 'https://unpkg.com/@deck.gl/core@8.9.28/dist.min.mjs';
     import { GeoJsonLayer } from 'https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.mjs';
 
     const map = new Deck({
+      parent: document.getElementById('map'),
+      views: [new MapView({ id: 'map-view' })],
+      controller: true,
       initialViewState: {
         longitude: -102,
         latitude: 38,
-        zoom: 5
+        zoom: 5,
+        minZoom: 2,
+        maxZoom: 15
       },
-      controller: true,
-      parent: document.getElementById('map'),
       layers: []
     });
 
@@ -83,18 +116,19 @@
         });
       }
 
-      return {
-        type: "FeatureCollection",
-        features: features
-      };
+      return { type: "FeatureCollection", features: features };
     }
 
-    async function loadMapData(csvPath) {
+    async function updateMap() {
+      const basin = document.getElementById('basin').value;
+      const component = document.getElementById('component').value;
+      const csvPath = `datasets_leaflet/${basin}/dataset_${component}.csv`;
+
       const csv = await fetch(csvPath).then(r => r.text());
       const geojson = csvToGeoJSON(csv);
 
       const dataLayer = new GeoJsonLayer({
-        id: 'data',
+        id: 'data-layer',
         data: geojson,
         filled: true,
         stroked: false,
@@ -125,8 +159,10 @@
       map.setProps({ layers: [basinLayer, dataLayer] });
     }
 
-    // Change the path here to use a different CSV
-    loadMapData('datasets_leaflet/Permian_Basin/dataset_C1.csv');
+    document.getElementById('basin').addEventListener('change', updateMap);
+    document.getElementById('component').addEventListener('change', updateMap);
+
+    updateMap();  // initial load
   </script>
 </body>
 </html>
