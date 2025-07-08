@@ -4,79 +4,64 @@
     <meta charset="utf-8" />
     <title>Gas Composition Map</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script src="https://unpkg.com/deck.gl@8.8.19/dist.min.js"></script>
+    <script src="https://unpkg.com/@loaders.gl/core@3.2.9/dist/dist.min.js"></script>
+    <script src="https://unpkg.com/@loaders.gl/csv@3.2.9/dist/dist.min.js"></script>
     <style>
-      body, html {
-        margin: 0;
-        padding: 0;
-        height: 100%;
-        overflow: hidden;
-      }
-      #map {
-        position: absolute;
-        top: 0;
-        bottom: 0;
-        width: 100%;
-      }
+      body, html { margin: 0; height: 100%; }
+      #map { position: absolute; top: 0; bottom: 0; width: 100%; }
     </style>
-    <script type="module">
-      import {Deck} from 'https://cdn.skypack.dev/@deck.gl/core';
-      import {PolygonLayer} from 'https://cdn.skypack.dev/@deck.gl/layers';
-      import {CSVLoader} from 'https://cdn.skypack.dev/@loaders.gl/csv';
-      import {load} from 'https://cdn.skypack.dev/@loaders.gl/core';
-      import {MapView} from 'https://cdn.skypack.dev/@deck.gl/core';
-
-      const GRID_WIDTH_DEG = 0.02;  // adjust this based on your 2000m spacing at mid-latitudes
-      const GRID_HEIGHT_DEG = 0.015;
-
-      const path = "datasets_latlon_test/Anadarko_Basin/dataset_I-C5_epsg4326.csv";
-
-      load(path, CSVLoader).then(data => {
-        const features = data.map(d => {
-          const lon = parseFloat(d.lon);
-          const lat = parseFloat(d.lat);
-          const halfWidth = GRID_WIDTH_DEG / 2;
-          const halfHeight = GRID_HEIGHT_DEG / 2;
-
-          return {
-            polygon: [
-              [lon - halfWidth, lat - halfHeight],
-              [lon + halfWidth, lat - halfHeight],
-              [lon + halfWidth, lat + halfHeight],
-              [lon - halfWidth, lat + halfHeight]
-            ],
-            value: parseFloat(d.value)
-          };
-        });
-
-        const layer = new PolygonLayer({
-          id: 'grid-layer',
-          data: features,
-          getPolygon: d => d.polygon,
-          getFillColor: d => {
-            const val = d.value;
-            const c = Math.floor(255 * (1 - val));  // simple grayscale mapping
-            return [c, c, 255, 180];
-          },
-          stroked: false,
-          pickable: true
-        });
-
-        new Deck({
-          views: new MapView({repeat: true}),
-          initialViewState: {
-            longitude: -100,
-            latitude: 36,
-            zoom: 5,
-            pitch: 0,
-            bearing: 0
-          },
-          controller: true,
-          layers: [layer]
-        });
-      });
-    </script>
   </head>
   <body>
     <div id="map"></div>
+    <script>
+      const deckgl = new deck.DeckGL({
+        container: 'map',
+        mapStyle: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+        initialViewState: {
+          latitude: 35.5,
+          longitude: -98.5,
+          zoom: 5,
+          bearing: 0,
+          pitch: 0
+        },
+        controller: true,
+        layers: []
+      });
+
+      // Adjust these based on 2000m grid (approximate at mid-latitudes)
+      const GRID_WIDTH_DEG = 0.02;
+      const GRID_HEIGHT_DEG = 0.015;
+
+      async function loadAndPlotCSV(url) {
+        const data = await loaders.load(url, loaders.CSVLoader, { csv: { dynamicTyping: true } });
+
+        const layer = new deck.GridLayer({
+          id: 'grid-layer',
+          data,
+          getPosition: d => [d.lon, d.lat],
+          getWeight: d => d.value,
+          cellSize: [GRID_WIDTH_DEG, GRID_HEIGHT_DEG],
+          extruded: true,
+          elevationScale: 1000,
+          getColorWeight: d => d.value,
+          colorAggregation: 'MEAN',
+          getColorValue: vals => vals.length ? vals[0] : 0,
+          colorRange: [
+            [255, 255, 204],
+            [161, 218, 180],
+            [65, 182, 196],
+            [44, 127, 184],
+            [37, 52, 148]
+          ],
+          pickable: true,
+        });
+
+        deckgl.setProps({ layers: [layer] });
+      }
+
+      // Replace with the actual relative path to your test CSV
+      loadAndPlotCSV('datasets_latlon/Anadarko_Basin/dataset_C1_epsg4326.csv');
+    </script>
   </body>
 </html>
