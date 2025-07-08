@@ -4,8 +4,6 @@
   <meta charset="utf-8" />
   <title>Gas Composition Viewer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-  <!-- UMD bundles -->
   <script src="https://unpkg.com/deck.gl@8.9.28/dist.min.js"></script>
   <script src="https://unpkg.com/@deck.gl/core@8.9.28/dist.min.js"></script>
   <script src="https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.js"></script>
@@ -39,7 +37,10 @@
 
   <div id="controls">
     <label for="basinSelect">Basin:</label>
-    <select id="basinSelect"></select>
+    <select id="basinSelect">
+      <option value="Permian_Basin">Permian Basin</option>
+      <option value="Anadarko_Basin">Anadarko Basin</option>
+    </select>
     <label for="componentSelect">Component:</label>
     <select id="componentSelect">
       <option value="C1">C1</option>
@@ -51,10 +52,8 @@
   <script>
     const { DeckGL, MapView } = deck;
     const { GeoJsonLayer } = deck;
-
+    const gridSize = 2000;
     const tooltip = document.getElementById('tooltip');
-    const GRID_WIDTH_DEG = 0.02;
-    const GRID_HEIGHT_DEG = 0.015;
 
     const deckgl = new DeckGL({
       container: 'map',
@@ -79,41 +78,27 @@
       return [255, 255, 204];
     }
 
-    function populateBasins() {
-      const basins = [
-        "Permian_Basin",
-        "Anadarko_Basin",
-        "Appalachian_Basin",
-        "San_Joaquin_Basin"
-        // Add more basins as needed
-      ];
-      const select = document.getElementById('basinSelect');
-      basins.forEach(name => {
-        const opt = document.createElement("option");
-        opt.value = name;
-        opt.text = name.replace(/_/g, " ");
-        select.appendChild(opt);
-      });
-    }
-
-    async function loadMapData(basin, component) {
-      const csvPath = `datasets_latlon/${basin}/dataset_${component}_epsg4326.csv`;
+    async function loadMapData(basinKey, component) {
+      const basinName = basinKey.replace(/_/g, ' ');
+      const csvPath = `datasets_latlon/${basinKey}/dataset_${component}_epsg4326.csv`;
       const response = await fetch(csvPath);
       const csv = await response.text();
 
       const lines = csv.trim().split('\n').slice(1);
       const features = [];
 
+      const half = gridSize / 2 / 111320;
+
       for (const line of lines) {
         const [lon, lat, val] = line.split(',').map(Number);
         if (isNaN(lon) || isNaN(lat) || isNaN(val)) continue;
 
         const poly = [
-          [lon - GRID_WIDTH_DEG / 2, lat - GRID_HEIGHT_DEG / 2],
-          [lon + GRID_WIDTH_DEG / 2, lat - GRID_HEIGHT_DEG / 2],
-          [lon + GRID_WIDTH_DEG / 2, lat + GRID_HEIGHT_DEG / 2],
-          [lon - GRID_WIDTH_DEG / 2, lat + GRID_HEIGHT_DEG / 2],
-          [lon - GRID_WIDTH_DEG / 2, lat - GRID_HEIGHT_DEG / 2]
+          [lon - half, lat - half],
+          [lon + half, lat - half],
+          [lon + half, lat + half],
+          [lon - half, lat + half],
+          [lon - half, lat - half]
         ];
 
         features.push({
@@ -145,27 +130,21 @@
         }
       });
 
-      // Load basin boundary if available
-      const boundaryPath = `geojson_basins/${basin}.geojson`;
-      let boundaryLayer = null;
-      try {
-        const res = await fetch(boundaryPath);
-        if (res.ok) {
-          const geojsonBoundary = await res.json();
-          boundaryLayer = new GeoJsonLayer({
-            id: 'basin-boundary',
-            data: geojsonBoundary,
-            stroked: true,
-            filled: false,
-            lineWidthMinPixels: 1,
-            getLineColor: [0, 0, 0],
-          });
-        }
-      } catch (e) {
-        console.warn("No boundary file for", basin);
-      }
+      // Add basin boundary layer
+      const boundaryRes = await fetch("basins_boundaries.geojson");
+      const boundaryJson = await boundaryRes.json();
+      const filtered = boundaryJson.features.filter(f => f.properties.BASIN_NAME === basinName);
 
-      deckgl.setProps({ layers: boundaryLayer ? [dataLayer, boundaryLayer] : [dataLayer] });
+      const basinLayer = new GeoJsonLayer({
+        id: 'basin-boundary-layer',
+        data: { type: "FeatureCollection", features: filtered },
+        stroked: true,
+        filled: false,
+        getLineColor: [0, 0, 0],
+        getLineWidth: 150
+      });
+
+      deckgl.setProps({ layers: [dataLayer, basinLayer] });
     }
 
     document.getElementById('loadButton').addEventListener('click', () => {
@@ -174,9 +153,7 @@
       loadMapData(basin, component);
     });
 
-    // Init
-    populateBasins();
-    loadMapData("Permian_Basin", "C1");
+    loadMapData('Permian_Basin', 'C1');
   </script>
 </body>
 </html>
