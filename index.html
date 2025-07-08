@@ -6,9 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
   <script src="https://unpkg.com/proj4@2.8.0/dist/proj4.js"></script>
-  <script src="https://unpkg.com/deck.gl@8.9.28/dist.min.js"></script>
-  <script src="https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.js"></script>
   <script src="https://unpkg.com/@deck.gl/core@8.9.28/dist.min.js"></script>
+  <script src="https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.js"></script>
 
   <style>
     body { margin: 0; padding: 0; font-family: sans-serif; }
@@ -71,13 +70,10 @@
     <button id="loadButton">Load</button>
   </div>
 
-  <script type="module">
-    import { Deck, MapView } from 'https://unpkg.com/@deck.gl/core@8.9.28/dist.min.mjs';
-    import { GeoJsonLayer } from 'https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.mjs';
-
-    proj4.defs("EPSG:26914", "+proj=utm +zone=14 +datum=NAD83 +units=m +no_defs");
-
-    const gridSize = 5000;
+  <script>
+    const { Deck, MapView } = deck;
+    const { GeoJsonLayer } = deck;
+    const gridSize = 2000;
     const tooltip = document.getElementById('tooltip');
     const loading = document.getElementById('loading');
 
@@ -107,22 +103,18 @@
     function csvToGeoJSON(csvText) {
       const lines = csvText.trim().split('\n').slice(1);
       const features = [];
-      console.log(`Parsing ${lines.length} lines of CSV data...`);
 
       for (const line of lines) {
-        const [x, y, val] = line.split(',').map(parseFloat);
-        if (isNaN(x) || isNaN(y) || isNaN(val)) continue;
+        const [lon, lat, val] = line.split(',').map(parseFloat);
+        if (isNaN(lon) || isNaN(lat) || isNaN(val)) continue;
 
-        const half = gridSize / 2;
-        const [lon1, lat1] = proj4("EPSG:26914", "EPSG:4326", [x - half, y - half]);
-        const [lon2, lat2] = proj4("EPSG:26914", "EPSG:4326", [x + half, y + half]);
-
+        const half = gridSize / 2 / 111320; // rough degrees for half grid (1 deg = ~111.32 km)
         const polygon = [
-          [lon1, lat1],
-          [lon2, lat1],
-          [lon2, lat2],
-          [lon1, lat2],
-          [lon1, lat1]
+          [lon - half, lat - half],
+          [lon + half, lat - half],
+          [lon + half, lat + half],
+          [lon - half, lat + half],
+          [lon - half, lat - half]
         ];
 
         features.push({
@@ -144,8 +136,7 @@
     async function loadMapData(basin, component) {
       try {
         loading.style.display = 'block';
-        const csvPath = `datasets_leaflet/${basin}/dataset_${component}.csv`;
-        console.log(`Fetching CSV: ${csvPath}`);
+        const csvPath = `datasets_latlon/${basin}/dataset_${component}_epsg4326.csv`;
         const csv = await fetch(csvPath).then(r => r.text());
         const geojson = csvToGeoJSON(csv);
 
