@@ -5,8 +5,10 @@
   <title>Gas Composition Viewer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- UMD versions -->
+  <!-- Use UMD bundles (not .mjs!) -->
+  <script src="https://unpkg.com/proj4@2.8.0/dist/proj4.js"></script>
   <script src="https://unpkg.com/deck.gl@8.9.28/dist.min.js"></script>
+  <script src="https://unpkg.com/@deck.gl/core@8.9.28/dist.min.js"></script>
   <script src="https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.js"></script>
 
   <style>
@@ -38,10 +40,7 @@
 
   <div id="controls">
     <label for="basinSelect">Basin:</label>
-    <select id="basinSelect">
-      <option value="Permian_Basin">Permian Basin</option>
-      <option value="Anadarko_Basin">Anadarko Basin</option>
-    </select>
+    <select id="basinSelect"></select>
     <label for="componentSelect">Component:</label>
     <select id="componentSelect">
       <option value="C1">C1</option>
@@ -54,8 +53,8 @@
     const { DeckGL, MapView } = deck;
     const { GeoJsonLayer } = deck;
 
-    const GRID_WIDTH_DEG = 0.0227;  // ~2000m in longitude at ~35–38°N
-    const GRID_HEIGHT_DEG = 0.018;  // ~2000m in latitude
+    const gridWidthDeg = 0.02;
+    const gridHeightDeg = 0.015;
 
     const tooltip = document.getElementById('tooltip');
 
@@ -65,7 +64,7 @@
       controller: true,
       initialViewState: {
         longitude: -102,
-        latitude: 36,
+        latitude: 38,
         zoom: 5
       },
       layers: []
@@ -90,16 +89,19 @@
       const lines = csv.trim().split('\n').slice(1);
       const features = [];
 
+      const halfW = gridWidthDeg / 2;
+      const halfH = gridHeightDeg / 2;
+
       for (const line of lines) {
         const [lon, lat, val] = line.split(',').map(Number);
         if (isNaN(lon) || isNaN(lat) || isNaN(val)) continue;
 
         const poly = [
-          [lon - GRID_WIDTH_DEG / 2, lat - GRID_HEIGHT_DEG / 2],
-          [lon + GRID_WIDTH_DEG / 2, lat - GRID_HEIGHT_DEG / 2],
-          [lon + GRID_WIDTH_DEG / 2, lat + GRID_HEIGHT_DEG / 2],
-          [lon - GRID_WIDTH_DEG / 2, lat + GRID_HEIGHT_DEG / 2],
-          [lon - GRID_WIDTH_DEG / 2, lat - GRID_HEIGHT_DEG / 2]
+          [lon - halfW, lat - halfH],
+          [lon + halfW, lat - halfH],
+          [lon + halfW, lat + halfH],
+          [lon - halfW, lat + halfH],
+          [lon - halfW, lat - halfH]
         ];
 
         features.push({
@@ -109,11 +111,9 @@
         });
       }
 
-      const geojson = { type: "FeatureCollection", features };
-
-      const dataLayer = new GeoJsonLayer({
-        id: 'data-layer',
-        data: geojson,
+      const gridLayer = new GeoJsonLayer({
+        id: 'grid-layer',
+        data: { type: "FeatureCollection", features },
         filled: true,
         stroked: false,
         getFillColor: d => getColor(d.properties.value),
@@ -131,7 +131,16 @@
         }
       });
 
-      deckgl.setProps({ layers: [dataLayer] });
+      const basinsLayer = new GeoJsonLayer({
+        id: 'basin-borders',
+        data: 'basins_boundaries.geojson',
+        stroked: true,
+        filled: false,
+        getLineColor: [0, 0, 0, 200],
+        getLineWidth: 1,
+      });
+
+      deckgl.setProps({ layers: [gridLayer, basinsLayer] });
     }
 
     document.getElementById('loadButton').addEventListener('click', () => {
@@ -140,7 +149,24 @@
       loadMapData(basin, component);
     });
 
-    loadMapData('Permian_Basin', 'C1');
+    async function populateBasins() {
+      const res = await fetch('datasets_latlon/');
+      const text = await res.text();
+      const matches = [...text.matchAll(/href="([^"?][^"]+)\/"/g)];
+      const basins = matches.map(m => m[1]);
+
+      const select = document.getElementById('basinSelect');
+      basins.forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.text = name.replace(/_/g, " ");
+        select.appendChild(opt);
+      });
+    }
+
+    populateBasins().then(() => {
+      loadMapData('Permian_Basin', 'C1');
+    });
   </script>
 </body>
 </html>
