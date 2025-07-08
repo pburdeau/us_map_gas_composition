@@ -4,14 +4,16 @@
   <meta charset="utf-8" />
   <title>Gas Composition Viewer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  
-  <!-- Safe UMD versions -->
+
+  <!-- Use UMD bundles (not .mjs!) -->
   <script src="https://unpkg.com/proj4@2.8.0/dist/proj4.js"></script>
   <script src="https://unpkg.com/deck.gl@8.9.28/dist.min.js"></script>
+  <script src="https://unpkg.com/@deck.gl/core@8.9.28/dist.min.js"></script>
+  <script src="https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.js"></script>
 
   <style>
-    body { margin: 0; padding: 0; font-family: sans-serif; }
-    #map { width: 100vw; height: 100vh; position: relative; }
+    body { margin: 0; font-family: sans-serif; }
+    #map { width: 100vw; height: 100vh; }
     #tooltip {
       position: absolute;
       background: white;
@@ -30,51 +32,36 @@
       border: 1px solid gray;
       z-index: 1000;
     }
-    #loading {
-      position: absolute;
-      top: 10px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: white;
-      padding: 6px 12px;
-      border: 1px solid #888;
-      font-size: 14px;
-      z-index: 999;
-    }
   </style>
 </head>
 <body>
   <div id="map"></div>
   <div id="tooltip"></div>
-  <div id="loading" style="display:none;">Loading map data…</div>
 
   <div id="controls">
     <label for="basinSelect">Basin:</label>
     <select id="basinSelect">
       <option value="Permian_Basin">Permian Basin</option>
       <option value="Anadarko_Basin">Anadarko Basin</option>
-      <option value="Appalachian_Basin">Appalachian Basin</option>
-      <option value="San_Joaquin_Basin">San Joaquin Basin</option>
     </select>
     <label for="componentSelect">Component:</label>
     <select id="componentSelect">
       <option value="C1">C1</option>
       <option value="std_C1">std_C1</option>
-      <option value="CO2">CO2</option>
-      <option value="std_CO2">std_CO2</option>
     </select>
     <button id="loadButton">Load</button>
   </div>
 
   <script>
-    proj4.defs("EPSG:26914", "+proj=utm +zone=14 +datum=NAD83 +units=m +no_defs");
+    const { DeckGL, MapView } = deck;
+    const { GeoJsonLayer } = deck;
 
-    const gridSize = 2000;
+    const gridSize = 2000;  // meters
     const tooltip = document.getElementById('tooltip');
-    const loading = document.getElementById('loading');
 
-    const map = new deck.DeckGL({
+    const deckgl = new DeckGL({
       container: 'map',
+      views: [new MapView({ repeat: true })],
       controller: true,
       initialViewState: {
         longitude: -102,
@@ -95,16 +82,21 @@
       return [255, 255, 204];
     }
 
-    function csvToGeoJSON(csvText) {
-      const lines = csvText.trim().split('\n').slice(1);
+    async function loadMapData(basin, component) {
+      const csvPath = `datasets_latlon/${basin}/dataset_${component}_epsg4326.csv`;
+      const response = await fetch(csvPath);
+      const csv = await response.text();
+
+      const lines = csv.trim().split('\n').slice(1);
       const features = [];
 
+      const half = gridSize / 2 / 111320;
+
       for (const line of lines) {
-        const [lon, lat, val] = line.split(',').map(parseFloat);
+        const [lon, lat, val] = line.split(',').map(Number);
         if (isNaN(lon) || isNaN(lat) || isNaN(val)) continue;
 
-        const half = gridSize / 2 / 111320; // convert meters to degrees approx
-        const polygon = [
+        const poly = [
           [lon - half, lat - half],
           [lon + half, lat - half],
           [lon + half, lat + half],
@@ -115,53 +107,33 @@
         features.push({
           type: "Feature",
           properties: { value: val },
-          geometry: {
-            type: "Polygon",
-            coordinates: [polygon]
-          }
+          geometry: { type: "Polygon", coordinates: [poly] }
         });
       }
 
-      return {
-        type: "FeatureCollection",
-        features
-      };
-    }
+      const geojson = { type: "FeatureCollection", features };
 
-    async function loadMapData(basin, component) {
-      try {
-        loading.style.display = 'block';
-        const csvPath = `datasets_latlon/${basin}/dataset_${component}_epsg4326.csv`;
-        const csv = await fetch(csvPath).then(r => r.text());
-        const geojson = csvToGeoJSON(csv);
-
-        const dataLayer = new deck.GeoJsonLayer({
-          id: 'data-layer',
-          data: geojson,
-          filled: true,
-          stroked: false,
-          getFillColor: d => getColor(d.properties.value),
-          pickable: true,
-          opacity: 0.7,
-          onHover: info => {
-            if (info.object) {
-              tooltip.style.display = 'block';
-              tooltip.style.left = `${info.x}px`;
-              tooltip.style.top = `${info.y}px`;
-              tooltip.innerHTML = `Value: ${info.object.properties.value.toFixed(3)}`;
-            } else {
-              tooltip.style.display = 'none';
-            }
+      const dataLayer = new GeoJsonLayer({
+        id: 'data-layer',
+        data: geojson,
+        filled: true,
+        stroked: false,
+        getFillColor: d => getColor(d.properties.value),
+        pickable: true,
+        opacity: 0.7,
+        onHover: info => {
+          if (info.object) {
+            tooltip.style.display = 'block';
+            tooltip.style.left = `${info.x}px`;
+            tooltip.style.top = `${info.y}px`;
+            tooltip.innerHTML = `Value: ${info.object.properties.value.toFixed(3)}`;
+          } else {
+            tooltip.style.display = 'none';
           }
-        });
+        }
+      });
 
-        map.setProps({ layers: [dataLayer] });
-      } catch (e) {
-        console.error("Error loading:", e);
-        alert("Failed to load dataset.");
-      } finally {
-        loading.style.display = 'none';
-      }
+      deckgl.setProps({ layers: [dataLayer] });
     }
 
     document.getElementById('loadButton').addEventListener('click', () => {
