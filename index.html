@@ -1,67 +1,146 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <meta charset="utf-8" />
-    <title>Gas Composition Map</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="https://unpkg.com/deck.gl@8.8.19/dist.min.js"></script>
-    <script src="https://unpkg.com/@loaders.gl/core@3.2.9/dist/dist.min.js"></script>
-    <script src="https://unpkg.com/@loaders.gl/csv@3.2.9/dist/dist.min.js"></script>
-    <style>
-      body, html { margin: 0; height: 100%; }
-      #map { position: absolute; top: 0; bottom: 0; width: 100%; }
-    </style>
-  </head>
-  <body>
-    <div id="map"></div>
-    <script>
-      const deckgl = new deck.DeckGL({
-        container: 'map',
-        mapStyle: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-        initialViewState: {
-          latitude: 35.5,
-          longitude: -98.5,
-          zoom: 5,
-          bearing: 0,
-          pitch: 0
-        },
-        controller: true,
-        layers: []
-      });
+<head>
+  <meta charset="utf-8" />
+  <title>Gas Composition Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-      // Adjust these based on 2000m grid (approximate at mid-latitudes)
-      const GRID_WIDTH_DEG = 0.02;
-      const GRID_HEIGHT_DEG = 0.015;
+  <!-- UMD versions -->
+  <script src="https://unpkg.com/deck.gl@8.9.28/dist.min.js"></script>
+  <script src="https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.js"></script>
 
-      async function loadAndPlotCSV(url) {
-        const data = await loaders.load(url, loaders.CSVLoader, { csv: { dynamicTyping: true } });
+  <style>
+    body { margin: 0; font-family: sans-serif; }
+    #map { width: 100vw; height: 100vh; }
+    #tooltip {
+      position: absolute;
+      background: white;
+      padding: 4px;
+      font-size: 13px;
+      border: 1px solid gray;
+      display: none;
+      pointer-events: none;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 8px;
+      border: 1px solid gray;
+      z-index: 1000;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+  <div id="tooltip"></div>
 
-        const layer = new deck.GridLayer({
-          id: 'grid-layer',
-          data,
-          getPosition: d => [d.lon, d.lat],
-          getWeight: d => d.value,
-          cellSize: [GRID_WIDTH_DEG, GRID_HEIGHT_DEG],
-          extruded: true,
-          elevationScale: 1000,
-          getColorWeight: d => d.value,
-          colorAggregation: 'MEAN',
-          getColorValue: vals => vals.length ? vals[0] : 0,
-          colorRange: [
-            [255, 255, 204],
-            [161, 218, 180],
-            [65, 182, 196],
-            [44, 127, 184],
-            [37, 52, 148]
-          ],
-          pickable: true,
+  <div id="controls">
+    <label for="basinSelect">Basin:</label>
+    <select id="basinSelect">
+      <option value="Permian_Basin">Permian Basin</option>
+      <option value="Anadarko_Basin">Anadarko Basin</option>
+    </select>
+    <label for="componentSelect">Component:</label>
+    <select id="componentSelect">
+      <option value="C1">C1</option>
+      <option value="std_C1">std_C1</option>
+    </select>
+    <button id="loadButton">Load</button>
+  </div>
+
+  <script>
+    const { DeckGL, MapView } = deck;
+    const { GeoJsonLayer } = deck;
+
+    const GRID_WIDTH_DEG = 0.0227;  // ~2000m in longitude at ~35–38°N
+    const GRID_HEIGHT_DEG = 0.018;  // ~2000m in latitude
+
+    const tooltip = document.getElementById('tooltip');
+
+    const deckgl = new DeckGL({
+      container: 'map',
+      views: [new MapView({ repeat: true })],
+      controller: true,
+      initialViewState: {
+        longitude: -102,
+        latitude: 36,
+        zoom: 5
+      },
+      layers: []
+    });
+
+    function getColor(value) {
+      if (value > 90) return [128, 0, 38];
+      if (value > 75) return [189, 0, 38];
+      if (value > 60) return [227, 26, 28];
+      if (value > 45) return [252, 78, 42];
+      if (value > 30) return [253, 141, 60];
+      if (value > 15) return [254, 217, 118];
+      if (value > 5)  return [255, 255, 178];
+      return [255, 255, 204];
+    }
+
+    async function loadMapData(basin, component) {
+      const csvPath = `datasets_latlon/${basin}/dataset_${component}_epsg4326.csv`;
+      const response = await fetch(csvPath);
+      const csv = await response.text();
+
+      const lines = csv.trim().split('\n').slice(1);
+      const features = [];
+
+      for (const line of lines) {
+        const [lon, lat, val] = line.split(',').map(Number);
+        if (isNaN(lon) || isNaN(lat) || isNaN(val)) continue;
+
+        const poly = [
+          [lon - GRID_WIDTH_DEG / 2, lat - GRID_HEIGHT_DEG / 2],
+          [lon + GRID_WIDTH_DEG / 2, lat - GRID_HEIGHT_DEG / 2],
+          [lon + GRID_WIDTH_DEG / 2, lat + GRID_HEIGHT_DEG / 2],
+          [lon - GRID_WIDTH_DEG / 2, lat + GRID_HEIGHT_DEG / 2],
+          [lon - GRID_WIDTH_DEG / 2, lat - GRID_HEIGHT_DEG / 2]
+        ];
+
+        features.push({
+          type: "Feature",
+          properties: { value: val },
+          geometry: { type: "Polygon", coordinates: [poly] }
         });
-
-        deckgl.setProps({ layers: [layer] });
       }
 
-      // Replace with the actual relative path to your test CSV
-      loadAndPlotCSV('datasets_latlon/Anadarko_Basin/dataset_C1_epsg4326.csv');
-    </script>
-  </body>
+      const geojson = { type: "FeatureCollection", features };
+
+      const dataLayer = new GeoJsonLayer({
+        id: 'data-layer',
+        data: geojson,
+        filled: true,
+        stroked: false,
+        getFillColor: d => getColor(d.properties.value),
+        pickable: true,
+        opacity: 0.7,
+        onHover: info => {
+          if (info.object) {
+            tooltip.style.display = 'block';
+            tooltip.style.left = `${info.x}px`;
+            tooltip.style.top = `${info.y}px`;
+            tooltip.innerHTML = `Value: ${info.object.properties.value.toFixed(3)}`;
+          } else {
+            tooltip.style.display = 'none';
+          }
+        }
+      });
+
+      deckgl.setProps({ layers: [dataLayer] });
+    }
+
+    document.getElementById('loadButton').addEventListener('click', () => {
+      const basin = document.getElementById('basinSelect').value;
+      const component = document.getElementById('componentSelect').value;
+      loadMapData(basin, component);
+    });
+
+    loadMapData('Permian_Basin', 'C1');
+  </script>
+</body>
 </html>
