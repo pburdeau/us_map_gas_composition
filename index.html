@@ -5,8 +5,7 @@
   <title>Gas Composition Viewer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <!-- Use UMD bundles (not .mjs!) -->
-  <script src="https://unpkg.com/proj4@2.8.0/dist/proj4.js"></script>
+  <!-- UMD bundles -->
   <script src="https://unpkg.com/deck.gl@8.9.28/dist.min.js"></script>
   <script src="https://unpkg.com/@deck.gl/core@8.9.28/dist.min.js"></script>
   <script src="https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.js"></script>
@@ -53,10 +52,9 @@
     const { DeckGL, MapView } = deck;
     const { GeoJsonLayer } = deck;
 
-    const gridWidthDeg = 0.02;
-    const gridHeightDeg = 0.015;
-
     const tooltip = document.getElementById('tooltip');
+    const GRID_WIDTH_DEG = 0.02;
+    const GRID_HEIGHT_DEG = 0.015;
 
     const deckgl = new DeckGL({
       container: 'map',
@@ -81,6 +79,23 @@
       return [255, 255, 204];
     }
 
+    function populateBasins() {
+      const basins = [
+        "Permian_Basin",
+        "Anadarko_Basin",
+        "Appalachian_Basin",
+        "San_Joaquin_Basin"
+        // Add more basins as needed
+      ];
+      const select = document.getElementById('basinSelect');
+      basins.forEach(name => {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.text = name.replace(/_/g, " ");
+        select.appendChild(opt);
+      });
+    }
+
     async function loadMapData(basin, component) {
       const csvPath = `datasets_latlon/${basin}/dataset_${component}_epsg4326.csv`;
       const response = await fetch(csvPath);
@@ -89,19 +104,16 @@
       const lines = csv.trim().split('\n').slice(1);
       const features = [];
 
-      const halfW = gridWidthDeg / 2;
-      const halfH = gridHeightDeg / 2;
-
       for (const line of lines) {
         const [lon, lat, val] = line.split(',').map(Number);
         if (isNaN(lon) || isNaN(lat) || isNaN(val)) continue;
 
         const poly = [
-          [lon - halfW, lat - halfH],
-          [lon + halfW, lat - halfH],
-          [lon + halfW, lat + halfH],
-          [lon - halfW, lat + halfH],
-          [lon - halfW, lat - halfH]
+          [lon - GRID_WIDTH_DEG / 2, lat - GRID_HEIGHT_DEG / 2],
+          [lon + GRID_WIDTH_DEG / 2, lat - GRID_HEIGHT_DEG / 2],
+          [lon + GRID_WIDTH_DEG / 2, lat + GRID_HEIGHT_DEG / 2],
+          [lon - GRID_WIDTH_DEG / 2, lat + GRID_HEIGHT_DEG / 2],
+          [lon - GRID_WIDTH_DEG / 2, lat - GRID_HEIGHT_DEG / 2]
         ];
 
         features.push({
@@ -111,9 +123,11 @@
         });
       }
 
-      const gridLayer = new GeoJsonLayer({
-        id: 'grid-layer',
-        data: { type: "FeatureCollection", features },
+      const geojson = { type: "FeatureCollection", features };
+
+      const dataLayer = new GeoJsonLayer({
+        id: 'data-layer',
+        data: geojson,
         filled: true,
         stroked: false,
         getFillColor: d => getColor(d.properties.value),
@@ -131,16 +145,27 @@
         }
       });
 
-      const basinsLayer = new GeoJsonLayer({
-        id: 'basin-borders',
-        data: 'basins_boundaries.geojson',
-        stroked: true,
-        filled: false,
-        getLineColor: [0, 0, 0, 200],
-        getLineWidth: 1,
-      });
+      // Load basin boundary if available
+      const boundaryPath = `geojson_basins/${basin}.geojson`;
+      let boundaryLayer = null;
+      try {
+        const res = await fetch(boundaryPath);
+        if (res.ok) {
+          const geojsonBoundary = await res.json();
+          boundaryLayer = new GeoJsonLayer({
+            id: 'basin-boundary',
+            data: geojsonBoundary,
+            stroked: true,
+            filled: false,
+            lineWidthMinPixels: 1,
+            getLineColor: [0, 0, 0],
+          });
+        }
+      } catch (e) {
+        console.warn("No boundary file for", basin);
+      }
 
-      deckgl.setProps({ layers: [gridLayer, basinsLayer] });
+      deckgl.setProps({ layers: boundaryLayer ? [dataLayer, boundaryLayer] : [dataLayer] });
     }
 
     document.getElementById('loadButton').addEventListener('click', () => {
@@ -149,24 +174,9 @@
       loadMapData(basin, component);
     });
 
-    async function populateBasins() {
-      const res = await fetch('datasets_latlon/');
-      const text = await res.text();
-      const matches = [...text.matchAll(/href="([^"?][^"]+)\/"/g)];
-      const basins = matches.map(m => m[1]);
-
-      const select = document.getElementById('basinSelect');
-      basins.forEach(name => {
-        const opt = document.createElement("option");
-        opt.value = name;
-        opt.text = name.replace(/_/g, " ");
-        select.appendChild(opt);
-      });
-    }
-
-    populateBasins().then(() => {
-      loadMapData('Permian_Basin', 'C1');
-    });
+    // Init
+    populateBasins();
+    loadMapData("Permian_Basin", "C1");
   </script>
 </body>
 </html>
