@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Gas Composition Viewer</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://unpkg.com/deck.gl@8.9.28/dist.min.js"></script>
+  <script src="https://unpkg.com/@deck.gl/core@8.9.28/dist.min.js"></script>
+  <script src="https://unpkg.com/@deck.gl/layers@8.9.28/dist.min.js"></script>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+    }
+    #main {
+      flex: 1;
+      position: relative;
+    }
+    #map {
+      width: 100vw;
+      height: 100%;
+    }
+    #tooltip {
+      position: absolute;
+      background: white;
+      padding: 4px;
+      font-size: 13px;
+      border: 1px solid gray;
+      display: none;
+      pointer-events: none;
+    }
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: white;
+      padding: 8px;
+      border: 1px solid gray;
+      z-index: 1000;
+    }
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(255, 255, 255, 0.9);
+      padding: 12px 20px;
+      border: 1px solid gray;
+      font-size: 16px;
+      z-index: 2000;
+      display: none;
+    }
+    #colorbar {
+      position: absolute;
+      bottom: 50%;
+      left: 10px;
+      background: white;
+      padding: 4px;
+      border: 1px solid gray;
+      font-size: 12px;
+      z-index: 1000;
+      pointer-events: none;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    footer {
+      width: 100%;
+      padding: 10px 15px;
+      font-size: 12px;
+      text-align: center;
+      border-top: 1px solid #ccc;
+      background: #f9f9f9;
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div id="main">
+    <div id="map"></div>
+    <div id="tooltip"></div>
+    <div id="loading">Loading data...</div>
+    <div id="colorbar"></div>
+
+    <div id="controls">
+      <label for="basinSelect">Basin:</label>
+      <select id="basinSelect">
+        <option value="Anadarko_Basin">Anadarko Basin</option>
+        <option value="Appalachian_Basin">Appalachian Basin</option>
+        <option value="Appalachian_Basin_(Eastern_Overthrust_Area)">Appalachian Basin (Eastern Overthrust Area)</option>
+        <option value="Arkla_Basin">Arkla Basin</option>
+        <option value="Arkoma_Basin">Arkoma Basin</option>
+        <option value="Bend_Arch">Bend Arch</option>
+        <option value="Chautauqua_Platform">Chautauqua Platform</option>
+        <option value="Denver_Basin">Denver Basin</option>
+        <option value="East_Texas_Basin">East Texas Basin</option>
+        <option value="Fort_Worth_Syncline">Fort Worth Syncline</option>
+        <option value="Green_River_Basin">Green River Basin</option>
+        <option value="Gulf_Coast_Basin_(LA,_TX)">Gulf Coast Basin (LA, TX)</option>
+        <option value="Las_Animas_Arch">Las Animas Arch</option>
+        <option value="Palo_Duro_Basin">Palo Duro Basin</option>
+        <option value="Paradox_Basin">Paradox Basin</option>
+        <option value="Permian_Basin">Permian Basin</option>
+        <option value="Piceance_Basin">Piceance Basin</option>
+        <option value="Powder_River_Basin">Powder River Basin</option>
+        <option value="San_Joaquin_Basin">San Joaquin Basin</option>
+        <option value="San_Juan_Basin">San Juan Basin</option>
+        <option value="South_Oklahoma_Folded_Belt">South Oklahoma Folded Belt</option>
+        <option value="Uinta_Basin">Uinta Basin</option>
+        <option value="Williston_Basin">Williston Basin</option>
+        <option value="Wind_River_Basin">Wind River Basin</option>
+        <option value="all_basins">All Basins</option>
+      </select>
+
+      <label for="componentSelect">Component:</label>
+      <select id="componentSelect">
+        <option value="HE">HE</option><option value="std_HE">std_HE</option>
+        <option value="CO2">CO2</option><option value="std_CO2">std_CO2</option>
+        <option value="H2">H2</option><option value="std_H2">std_H2</option>
+        <option value="N2">N2</option><option value="std_N2">std_N2</option>
+        <option value="H2S">H2S</option><option value="std_H2S">std_H2S</option>
+        <option value="AR">AR</option><option value="std_AR">std_AR</option>
+        <option value="O2">O2</option><option value="std_O2">std_O2</option>
+        <option value="C1" selected>C1</option><option value="std_C1">std_C1</option>
+        <option value="C2">C2</option><option value="std_C2">std_C2</option>
+        <option value="C3">C3</option><option value="std_C3">std_C3</option>
+        <option value="N-C4">N-C4</option><option value="std_N-C4">std_N-C4</option>
+        <option value="I-C4">I-C4</option><option value="std_I-C4">std_I-C4</option>
+        <option value="N-C5">N-C5</option><option value="std_N-C5">std_N-C5</option>
+        <option value="I-C5">I-C5</option><option value="std_I-C5">std_I-C5</option>
+        <option value="C6+">C6+</option><option value="std_C6+">std_C6+</option>
+      </select>
+      <button id="loadButton">Load</button>
+      <button id="downloadButton">Download CSV</button>
+    </div>
+  </div>
+
+  <footer>
+    This map presents results from the preprint:<br>
+    <strong>“High-resolution national mapping of natural gas composition redefines methane leakage impacts”</strong><br>
+    Burdeau, Sherwin, Biraud, Berman, Brandt<br>
+    <a href="https://doi.org/10.22541/au.000083064" target="_blank">Read the preprint</a>
+  </footer>
+
+  <script>
+    const { DeckGL, MapView, GeoJsonLayer } = deck;
+    const gridSize = 2000;
+    const tooltip = document.getElementById('tooltip');
+    const loading = document.getElementById('loading');
+    let allBoundaries;
+
+    const deckgl = new DeckGL({
+      container: 'map',
+      views: [new MapView({ repeat: true })],
+      controller: true,
+      initialViewState: { longitude: -98, latitude: 39, zoom: 3.3 },
+      layers: []
+    });
+
+    const cubehelixScale = d3.scaleSequential(d3.interpolateCubehelixLong("#e0f3db", "#0868ac"));
+
+    function basinNameToKey(name) {
+      return name.replace(/ /g, "_");
+    }
+
+    function getColorFromValue(val, vmin, vmax, isStd = false) {
+      const t = Math.max(0, Math.min(1, (val - vmin) / (vmax - vmin)));
+      if (isStd) {
+        const gray = Math.round(255 * (1 - t));
+        return [gray, gray, gray];
+      } else {
+        const c = d3.rgb(cubehelixScale(t));
+        return [c.r, c.g, c.b];
+      }
+    }
+
+    function updateColorbar(vmin, vmax, isStd) {
+      const canvas = document.createElement('canvas');
+      canvas.width = 1; canvas.height = 256;
+      canvas.style.width = '15px'; canvas.style.height = '256px';
+      const ctx = canvas.getContext('2d');
+      const img = ctx.createImageData(1,256);
+      for (let j=0; j<256; j++) {
+        const t = 1 - j/255;
+        const val = vmin + t*(vmax - vmin);
+        const [r,g,b] = getColorFromValue(val,vmin,vmax,isStd);
+        img.data[j*4+0]=r; img.data[j*4+1]=g; img.data[j*4+2]=b; img.data[j*4+3]=255;
+      }
+      ctx.putImageData(img,0,0);
+      const cb = document.getElementById('colorbar');
+      cb.innerHTML='';
+      [''+vmax.toFixed(2),'[mol %]',''+vmin.toFixed(2)].forEach(txt=>{
+        const d=document.createElement('div');
+        d.textContent=txt;
+        if (txt==='[mol %]') d.style.fontSize='10px';
+        cb.appendChild(d);
+      });
+      cb.appendChild(canvas);
+    }
+
+    async function loadMapData(basinKey, component) {
+      loading.style.display='block';
+      const files = basinKey==='all_basins'
+        ? Array.from(document.getElementById('basinSelect').options).map(o=>o.value).filter(v=>v!=='all_basins')
+        : [basinKey];
+      const features=[], allValues=[];
+      const half = gridSize/2/111320;
+      for (const key of files) {
+        try {
+          const text = await (await fetch(`datasets_latlon/${key}/dataset_${component}_epsg4326.csv`)).text();
+          text.trim().split('\n').slice(1).forEach(line=>{
+            const [lon,lat,val]=line.split(',').map(Number);
+            if ([lon,lat,val].some(isNaN)) return;
+            allValues.push(val);
+            const poly=[[lon-half,lat-half],[lon+half,lat-half],[lon+half,lat+half],[lon-half,lat+half],[lon-half,lat-half]];
+            features.push({type:'Feature',properties:{value:val},geometry:{type:'Polygon',coordinates:[poly]}});
+          });
+        } catch(e){
+          console.warn('Missing data for', key);
+        }
+      }
+      allValues.sort((a,b)=>a-b);
+      const vmin=d3.quantileSorted(allValues,0.1), vmax=d3.quantileSorted(allValues,0.9);
+      const isStd = component.startsWith('std_');
+      const dataLayer = new GeoJsonLayer({
+        id:'data-layer',
+        data:{type:'FeatureCollection',features},
+        filled:true,stroked:false,
+        getFillColor:d=>getColorFromValue(d.properties.value,vmin,vmax,isStd),
+        pickable:true,opacity:0.8,
+        onHover:info=>{
+          if(info.object){
+            tooltip.style.display='block';
+            tooltip.style.left=`${info.x}px`;
+            tooltip.style.top=`${info.y}px`;
+            tooltip.innerHTML=`Value: ${info.object.properties.value.toFixed(3)} [mol %]`;
+          } else tooltip.style.display='none';
+        }
+      });
+      const boundaryLayer = new GeoJsonLayer({
+        id:'all-basins',
+        data: allBoundaries,
+        filled:false, stroked:true,
+        getLineColor:[120,120,120],
+        getLineDashArray:[4,4],
+        lineWidthMinPixels:1
+      });
+      let selectedLayer=null;
+      if(basinKey!=='all_basins'){
+        const sel = allBoundaries.features.filter(f=>basinNameToKey(f.properties.BASIN_NAME)===basinKey);
+        selectedLayer=new GeoJsonLayer({
+          id:'selected-basin',
+          data:{type:'FeatureCollection',features:sel},
+          filled:false,stroked:true,
+          getLineColor:[0,0,0],
+          lineWidthMinPixels:3
+        });
+      }
+      const layers = [boundaryLayer, dataLayer];
+      if(selectedLayer) layers.push(selectedLayer);
+      deckgl.setProps({layers});
+      updateColorbar(vmin,vmax,isStd);
+      loading.style.display='none';
+    }
+
+    async function init(){
+      allBoundaries = await (await fetch('basins_boundaries.geojson')).json();
+      deckgl.setProps({
+        layers:[new GeoJsonLayer({
+          id:'all-basins',
+          data:allBoundaries,
+          filled:false,stroked:true,
+          getLineColor:[120,120,120],
+          getLineDashArray:[4,4],
+          lineWidthMinPixels:1,
+          pickable:true,
+          onClick:info=>{
+            if(info.object){
+              const key=basinNameToKey(info.object.properties.BASIN_NAME);
+              const sel=document.getElementById('basinSelect');
+              if([...sel.options].some(o=>o.value===key)){
+                sel.value=key;
+                document.getElementById('loadButton').click();
+              }
+            }
+          }
+        })]
+      });
+      document.getElementById('loadButton').onclick=()=>{
+        loadMapData(
+          document.getElementById('basinSelect').value,
+          document.getElementById('componentSelect').value
+        );
+      };
+      document.getElementById('downloadButton').onclick=async()=>{
+        const basin=document.getElementById('basinSelect').value;
+        const comp=document.getElementById('componentSelect').value;
+        if(basin!=='all_basins'){
+          const url=`datasets_latlon/${basin}/dataset_${comp}_epsg4326.csv`;
+          const a=document.createElement('a');
+          a.href=url; a.download=`${basin}_${comp}.csv`;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        } else {
+          let combined='X,Y,value\n';
+          const opts=Array.from(document.getElementById('basinSelect').options)
+            .map(o=>o.value).filter(v=>v!=='all_basins');
+          for(const b of opts){
+            try{
+              const txt=await (await fetch(`datasets_latlon/${b}/dataset_${comp}_epsg4326.csv`)).text();
+              combined+=txt.split('\n').slice(1).join('\n')+'\n';
+            }catch{}
+          }
+          const blob=new Blob([combined],{type:'text/csv'});
+          const url=URL.createObjectURL(blob);
+          const a=document.createElement('a');
+          a.href=url; a.download=`all_basins_${comp}.csv`;
+          document.body.appendChild(a); a.click(); document.body.removeChild(a);
+          URL.revokeObjectURL(url);
+        }
+      };
+    }
+
+    init();
+  </script>
+</body>
+</html>
