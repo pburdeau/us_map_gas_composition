@@ -208,7 +208,8 @@
         ? Array.from(document.getElementById('basinSelect').options).map(o=>o.value).filter(v=>'all_basins'!==v)
         : [basinKey];
       const features = [], allVals = [];
-      const half = gridSize/2/111320;
+      // const half = gridSize/2/111320;
+      const delta = gridSize / 111320;
       for (const key of files) {
         try {
           const text = await (await fetch(`datasets_latlon/${key}/dataset_${component}_epsg4326.csv`)).text();
@@ -216,7 +217,14 @@
             const [lon,lat,val] = line.split(',').map(Number);
             if ([lon,lat,val].some(isNaN)) return;
             allVals.push(val);
-            const poly = [[lon-half,lat-half],[lon+half,lat-half],[lon+half,lat+half],[lon-half,lat+half],[lon-half,lat-half]];
+            // const poly = [[lon-half,lat-half],[lon+half,lat-half],[lon+half,lat+half],[lon-half,lat+half],[lon-half,lat-half]];
+            const poly = [
+              [lon,         lat],
+              [lon + delta, lat],
+              [lon + delta, lat + delta],
+              [lon,         lat + delta],
+              [lon,         lat]
+            ];
             features.push({type:'Feature',properties:{value:val},geometry:{type:'Polygon',coordinates:[poly]}});
           });
         } catch(e){
